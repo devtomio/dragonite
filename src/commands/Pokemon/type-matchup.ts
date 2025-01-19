@@ -1,58 +1,40 @@
 import { DragoniteCommand } from '#lib/extensions/DragoniteCommand';
 import { typeMatchupResponseBuilder } from '#utils/responseBuilders/typeMatchupResponseBuilder';
-import { getGuildIds } from '#utils/utils';
-import type { TypesEnum } from '@favware/graphql-pokemon';
+import { TypesEnum } from '@favware/graphql-pokemon';
 import { ApplyOptions } from '@sapphire/decorators';
-import { ChatInputCommand, UserError } from '@sapphire/framework';
-import { filterNullish, isNullish, toTitleCase } from '@sapphire/utilities';
+import { UserError, type ChatInputCommand } from '@sapphire/framework';
+import { filterNullish, isNullish, objectEntries } from '@sapphire/utilities';
+import { ApplicationIntegrationType, InteractionContextType, type APIApplicationCommandOptionChoice } from 'discord.js';
 
 @ApplyOptions<ChatInputCommand.Options>({
   description: 'Gets data for the chosen type matchup.'
 })
 export class SlashCommand extends DragoniteCommand {
-  readonly #pokemonTypes = [
-    'bug',
-    'dark',
-    'dragon',
-    'electric',
-    'fairy',
-    'fighting',
-    'fire',
-    'flying',
-    'ghost',
-    'grass',
-    'ground',
-    'ice',
-    'normal',
-    'poison',
-    'psychic',
-    'rock',
-    'steel',
-    'water'
-  ];
-
-  readonly #choices = this.#pokemonTypes.map<[name: string, value: string]>((type) => [toTitleCase(type), type]);
+  private readonly choices = objectEntries(TypesEnum).map<APIApplicationCommandOptionChoice<string>>(([key, type]) => ({
+    name: key,
+    value: type
+  }));
 
   public override registerApplicationCommands(registry: ChatInputCommand.Registry) {
-    registry.registerChatInputCommand(
-      (builder) =>
-        builder //
-          .setName(this.name)
-          .setDescription(this.description)
-          .addStringOption((option) =>
-            option //
-              .setName('first-type')
-              .setDescription('The first type to include in the type matchup.')
-              .setRequired(true)
-              .setChoices(this.#choices)
-          )
-          .addStringOption((option) =>
-            option //
-              .setName('second-type')
-              .setDescription('The second type to include in the type matchup.')
-              .setChoices(this.#choices)
-          ),
-      { guildIds: getGuildIds(), idHints: ['936023679853293688', '942137487571173376'] }
+    registry.registerChatInputCommand((builder) =>
+      builder //
+        .setName(this.name)
+        .setDescription(this.description)
+        .addStringOption((option) =>
+          option //
+            .setName('first-type')
+            .setDescription('The first type to include in the type matchup.')
+            .setRequired(true)
+            .setChoices(...this.choices)
+        )
+        .addStringOption((option) =>
+          option //
+            .setName('second-type')
+            .setDescription('The second type to include in the type matchup.')
+            .setChoices(...this.choices)
+        )
+        .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+        .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
     );
   }
 
@@ -63,7 +45,7 @@ export class SlashCommand extends DragoniteCommand {
     const secondtype = interaction.options.getString('second-type', false) as TypesEnum | null;
     const types = [firstType, secondtype].filter(filterNullish);
 
-    const typeMatchup = await this.container.gqlClient.getTypeMatchup(types);
+    const typeMatchup = await this.container.gqlClient.getTypeMatchup(firstType, secondtype ?? undefined);
 
     if (isNullish(typeMatchup)) {
       throw new UserError({
@@ -72,8 +54,6 @@ export class SlashCommand extends DragoniteCommand {
       });
     }
 
-    const paginatedMessage = typeMatchupResponseBuilder(types, typeMatchup);
-
-    return paginatedMessage.run(interaction);
+    return interaction.editReply(typeMatchupResponseBuilder(types, typeMatchup));
   }
 }

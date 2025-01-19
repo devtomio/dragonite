@@ -1,21 +1,21 @@
 import { SelectMenuCustomIds } from '#utils/constants';
+import { decompressPokemonCustomIdMetadata } from '#utils/pokemonCustomIdCompression';
 import { flavorResponseBuilder } from '#utils/responseBuilders/flavorResponseBuilder';
 import { learnsetResponseBuilder } from '#utils/responseBuilders/learnsetResponseBuilder';
 import { pokemonResponseBuilder } from '#utils/responseBuilders/pokemonResponseBuilder';
 import { spriteResponseBuilder } from '#utils/responseBuilders/spriteResponseBuilder';
-import { decompressPokemonCustomIdMetadata } from '#utils/utils';
 import type { Learnset, Pokemon, PokemonEnum } from '@favware/graphql-pokemon';
 import { ApplyOptions } from '@sapphire/decorators';
 import type { PaginatedMessage } from '@sapphire/discord.js-utilities';
 import { InteractionHandler, InteractionHandlerTypes, UserError } from '@sapphire/framework';
 import { isNullish } from '@sapphire/utilities';
-import type { SelectMenuInteraction } from 'discord.js';
+import type { StringSelectMenuInteraction } from 'discord.js';
 
 @ApplyOptions<InteractionHandler.Options>({
   interactionHandlerType: InteractionHandlerTypes.SelectMenu
 })
 export class SelectMenuHandler extends InteractionHandler {
-  public override run(interaction: SelectMenuInteraction, result: InteractionHandler.ParseResult<this>) {
+  public override run(interaction: StringSelectMenuInteraction, result: InteractionHandler.ParseResult<this>) {
     if (isNullish(result.pokemonDetails)) {
       throw new UserError({
         identifier: 'PokemonQueryFail',
@@ -51,18 +51,21 @@ export class SelectMenuHandler extends InteractionHandler {
     return paginatedMessage.run(interaction, interaction.user);
   }
 
-  public override async parse(interaction: SelectMenuInteraction) {
+  public override async parse(interaction: StringSelectMenuInteraction) {
     if (!interaction.customId.startsWith(SelectMenuCustomIds.Pokemon)) return this.none();
 
     await interaction.deferReply();
 
     const pokemon = interaction.values[0];
     const splitCustomId = interaction.customId.split('|');
-    const data = decompressPokemonCustomIdMetadata(splitCustomId.slice(1).join('|'), { interaction, handler: this });
+    const data = decompressPokemonCustomIdMetadata(splitCustomId.slice(1).join('|'), {
+      interaction,
+      handler: this
+    });
 
     const responseToGenerate = data.type;
     const spriteToGet = data.spriteToGet ?? 'sprite';
-    const generation = data.generation ?? 8;
+    const generation = data.generation ?? 9;
     const moves = data.moves ?? [];
 
     let pokemonDetails: Omit<Pokemon, '__typename'> | Omit<Learnset, '__typename'> | undefined;

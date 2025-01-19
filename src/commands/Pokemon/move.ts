@@ -1,31 +1,30 @@
 import { DragoniteCommand } from '#lib/extensions/DragoniteCommand';
 import { SelectMenuCustomIds } from '#utils/constants';
 import { moveResponseBuilder } from '#utils/responseBuilders/moveResponseBuilder';
-import { getGuildIds } from '#utils/utils';
 import type { MovesEnum } from '@favware/graphql-pokemon';
 import { ApplyOptions } from '@sapphire/decorators';
 import type { ChatInputCommand } from '@sapphire/framework';
 import { isNullish } from '@sapphire/utilities';
-import { MessageActionRow, MessageSelectMenu, type MessageSelectOptionData } from 'discord.js';
+import { ActionRowBuilder, ApplicationIntegrationType, InteractionContextType, StringSelectMenuBuilder, type APISelectMenuOption } from 'discord.js';
 
 @ApplyOptions<ChatInputCommand.Options>({
   description: 'Gets data for the chosen Pokémon move.'
 })
 export class SlashCommand extends DragoniteCommand {
   public override registerApplicationCommands(registry: ChatInputCommand.Registry) {
-    registry.registerChatInputCommand(
-      (builder) =>
-        builder //
-          .setName(this.name)
-          .setDescription(this.description)
-          .addStringOption((option) =>
-            option //
-              .setName('move')
-              .setDescription('The name of the move about which you want to get information.')
-              .setRequired(true)
-              .setAutocomplete(true)
-          ),
-      { guildIds: getGuildIds(), idHints: ['936023595044442163', '942137486510018571'] }
+    registry.registerChatInputCommand((builder) =>
+      builder //
+        .setName(this.name)
+        .setDescription(this.description)
+        .addStringOption((option) =>
+          option //
+            .setName('move')
+            .setDescription('The name of the move about which you want to get information.')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+        .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
     );
   }
 
@@ -38,11 +37,11 @@ export class SlashCommand extends DragoniteCommand {
 
     if (isNullish(moveDetails)) {
       const fuzzyMoves = await this.container.gqlClient.fuzzilySearchMoves(move, 25);
-      const options = fuzzyMoves.map<MessageSelectOptionData>((fuzzyMatch) => ({ label: fuzzyMatch.name, value: fuzzyMatch.key }));
+      const options = fuzzyMoves.map<APISelectMenuOption>((fuzzyMatch) => ({ label: fuzzyMatch.name, value: fuzzyMatch.key }));
 
-      const messageActionRow = new MessageActionRow() //
+      const messageActionRow = new ActionRowBuilder<StringSelectMenuBuilder>() //
         .setComponents(
-          new MessageSelectMenu() //
+          new StringSelectMenuBuilder() //
             .setCustomId(SelectMenuCustomIds.Move)
             .setPlaceholder('Choose the move you want to get information about.')
             .setOptions(options)

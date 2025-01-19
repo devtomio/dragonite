@@ -1,81 +1,89 @@
 import { DragoniteCommand } from '#lib/extensions/DragoniteCommand';
 import { SelectMenuCustomIds } from '#utils/constants';
+import { compressPokemonCustomIdMetadata } from '#utils/pokemonCustomIdCompression';
 import { learnsetResponseBuilder } from '#utils/responseBuilders/learnsetResponseBuilder';
-import { fuzzyPokemonToSelectOption, PokemonSpriteTypes } from '#utils/responseBuilders/pokemonResponseBuilder';
-import { compressPokemonCustomIdMetadata, getGuildIds } from '#utils/utils';
+import { fuzzyPokemonToSelectOption, type PokemonSpriteTypes } from '#utils/responseBuilders/pokemonResponseBuilder';
 import type { MovesEnum, PokemonEnum } from '@favware/graphql-pokemon';
 import { ApplyOptions } from '@sapphire/decorators';
 import type { ChatInputCommand } from '@sapphire/framework';
 import { filterNullish, isNullish } from '@sapphire/utilities';
-import { MessageActionRow, MessageSelectMenu, type MessageSelectOptionData } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ApplicationIntegrationType,
+  InteractionContextType,
+  StringSelectMenuBuilder,
+  type APIApplicationCommandOptionChoice,
+  type APISelectMenuOption
+} from 'discord.js';
 
 @ApplyOptions<ChatInputCommand.Options>({
   description: 'Tells you whether the chosen Pokémon can learn the chosen move or moves.'
 })
 export class SlashCommand extends DragoniteCommand {
-  readonly #spriteChoices: [name: string, value: PokemonSpriteTypes][] = [
-    ['Regular Sprite', 'sprite'],
-    ['Regular Back Sprite', 'backSprite'],
-    ['Shiny Sprite', 'shinySprite'],
-    ['Shiny Back Sprite', 'shinyBackSprite']
+  private readonly spriteChoices: APIApplicationCommandOptionChoice<PokemonSpriteTypes>[] = [
+    { name: 'Regular Sprite', value: 'sprite' },
+    { name: 'Regular Back Sprite', value: 'backSprite' },
+    { name: 'Shiny Sprite', value: 'shinySprite' },
+    { name: 'Shiny Back Sprite', value: 'shinyBackSprite' }
   ];
 
-  readonly #generationChoices: [name: string, value: number][] = [
-    ['Generation 1', 1],
-    ['Generation 2', 2],
-    ['Generation 3', 3],
-    ['Generation 4', 4],
-    ['Generation 5', 5],
-    ['Generation 6', 6],
-    ['Generation 7', 7],
-    ['Generation 8', 8]
+  private readonly generationChoices: APIApplicationCommandOptionChoice<number>[] = [
+    { name: 'Generation 1', value: 1 },
+    { name: 'Generation 2', value: 2 },
+    { name: 'Generation 3', value: 3 },
+    { name: 'Generation 4', value: 4 },
+    { name: 'Generation 5', value: 5 },
+    { name: 'Generation 6', value: 6 },
+    { name: 'Generation 7', value: 7 },
+    { name: 'Generation 8', value: 8 },
+    { name: 'Generation 9', value: 9 }
   ];
 
   public override registerApplicationCommands(registry: ChatInputCommand.Registry) {
-    registry.registerChatInputCommand(
-      (builder) =>
-        builder //
-          .setName(this.name)
-          .setDescription(this.description)
-          .addStringOption((option) =>
-            option //
-              .setName('pokemon')
-              .setDescription('The name of the Pokémon for whom you want to check if they learn a move.')
-              .setRequired(true)
-              .setAutocomplete(true)
-          )
-          .addStringOption((option) =>
-            option //
-              .setName('move-1')
-              .setDescription('The name of the move that you want to check if the Pokémon learns.')
-              .setRequired(true)
-              .setAutocomplete(true)
-          )
-          .addStringOption((option) =>
-            option //
-              .setName('move-2')
-              .setDescription('An optional second move name that you want to check if the Pokémon learns.')
-              .setAutocomplete(true)
-          )
-          .addStringOption((option) =>
-            option //
-              .setName('move-3')
-              .setDescription('An optional third move name that you want to check if the Pokémon learns.')
-              .setAutocomplete(true)
-          )
-          .addIntegerOption((option) =>
-            option //
-              .setName('generation')
-              .setDescription('The Pokémon generation that you want to check in if the Pokémon learns the move.')
-              .setChoices(this.#generationChoices)
-          )
-          .addStringOption((option) =>
-            option //
-              .setName('sprite')
-              .setDescription('The sprite that you want the result to show.')
-              .setChoices(this.#spriteChoices)
-          ),
-      { guildIds: getGuildIds(), idHints: ['936023594109108265', '942137402686857248'] }
+    registry.registerChatInputCommand((builder) =>
+      builder //
+        .setName(this.name)
+        .setDescription(this.description)
+        .addStringOption((option) =>
+          option //
+            .setName('pokemon')
+            .setDescription('The name of the Pokémon for whom you want to check if they learn a move.')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption((option) =>
+          option //
+            .setName('move-1')
+            .setDescription('The name of the move that you want to check if the Pokémon learns.')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption((option) =>
+          option //
+            .setName('move-2')
+            .setDescription('An optional second move name that you want to check if the Pokémon learns.')
+            .setAutocomplete(true)
+        )
+        .addStringOption((option) =>
+          option //
+            .setName('move-3')
+            .setDescription('An optional third move name that you want to check if the Pokémon learns.')
+            .setAutocomplete(true)
+        )
+        .addIntegerOption((option) =>
+          option //
+            .setName('generation')
+            .setDescription('The Pokémon generation that you want to check in if the Pokémon learns the move.')
+            .setChoices(...this.generationChoices)
+        )
+        .addStringOption((option) =>
+          option //
+            .setName('sprite')
+            .setDescription('The sprite that you want the result to show.')
+            .setChoices(...this.spriteChoices)
+        )
+        .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+        .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
     );
   }
 
@@ -86,7 +94,7 @@ export class SlashCommand extends DragoniteCommand {
     const move1 = interaction.options.getString('move-1', true);
     const move2 = interaction.options.getString('move-2');
     const move3 = interaction.options.getString('move-3');
-    const generation = interaction.options.getInteger('generation') ?? 8;
+    const generation = interaction.options.getInteger('generation') ?? 9;
     const spriteToGet: PokemonSpriteTypes = (interaction.options.getString('sprite') as PokemonSpriteTypes | null) ?? 'sprite';
 
     const actuallyChosenMoves = [move1 as MovesEnum, move2 as MovesEnum, move3 as MovesEnum].filter(filterNullish);
@@ -95,7 +103,7 @@ export class SlashCommand extends DragoniteCommand {
 
     if (isNullish(learnsetDetails)) {
       const fuzzyPokemon = await this.container.gqlClient.fuzzilySearchPokemon(pokemon, 25, false);
-      const options = fuzzyPokemon.map<MessageSelectOptionData>((fuzzyEntry) => fuzzyPokemonToSelectOption(fuzzyEntry, 'label'));
+      const options = fuzzyPokemon.map<APISelectMenuOption>((fuzzyEntry) => fuzzyPokemonToSelectOption(fuzzyEntry, 'label'));
 
       const metadata = compressPokemonCustomIdMetadata(
         {
@@ -109,9 +117,9 @@ export class SlashCommand extends DragoniteCommand {
 
       const customIdStringified = `${SelectMenuCustomIds.Pokemon}|${metadata}`;
 
-      const messageActionRow = new MessageActionRow() //
+      const messageActionRow = new ActionRowBuilder<StringSelectMenuBuilder>() //
         .setComponents(
-          new MessageSelectMenu() //
+          new StringSelectMenuBuilder() //
             .setCustomId(customIdStringified)
             .setPlaceholder('Choose the Pokémon you want to check these moves for.')
             .setOptions(options)

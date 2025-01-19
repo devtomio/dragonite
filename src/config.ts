@@ -1,23 +1,8 @@
-// Unless explicitly defined, set NODE_ENV as development:
-process.env.NODE_ENV ??= 'development';
-
-import { envParseBoolean, envParseInteger, envParseString } from '#lib/env';
-import { srcFolder } from '#utils/constants';
-import { minutes } from '#utils/functions/time';
 import { LogLevel } from '@sapphire/framework';
-import { ScheduledTaskRedisStrategy } from '@sapphire/plugin-scheduled-tasks/register-redis';
-import { GatewayIntentBits } from 'discord-api-types/v9';
-import { ActivitiesOptions, ClientOptions, ExcludeEnum, Options, WebhookClientData } from 'discord.js';
-import type { ActivityTypes } from 'discord.js/typings/enums';
-import { config } from 'dotenv-cra';
-import { join } from 'path';
-import { fileURLToPath } from 'url';
-
-// Read config:
-config({
-  debug: process.env.DOTENV_DEBUG_ENABLED ? envParseBoolean('DOTENV_DEBUG_ENABLED') : undefined,
-  path: join(fileURLToPath(srcFolder), '.env')
-});
+import { cast } from '@sapphire/utilities';
+import { envParseInteger, envParseString } from '@skyra/env-utilities';
+import type { RedisOptions } from 'bullmq';
+import { ActivityType, GatewayIntentBits, Partials, type ActivitiesOptions, type ClientOptions, type WebhookClientData } from 'discord.js';
 
 export const OWNERS = ['268792781713965056'];
 
@@ -28,7 +13,7 @@ function parsePresenceActivity(): ActivitiesOptions[] {
   return [
     {
       name: CLIENT_PRESENCE_NAME,
-      type: envParseString('CLIENT_PRESENCE_TYPE', 'WATCHING') as ExcludeEnum<typeof ActivityTypes, 'CUSTOM'>
+      type: cast<Exclude<ActivityType, ActivityType.Custom>>(envParseString('CLIENT_PRESENCE_TYPE', 'WATCHING'))
     }
   ];
 }
@@ -43,7 +28,7 @@ function parseWebhookError(): WebhookClientData | null {
   };
 }
 
-export function parseRedisOption(): { port: number; password: string; host: string } {
+export function parseRedisOption(): Pick<RedisOptions, 'port' | 'password' | 'host'> {
   return {
     port: envParseInteger('REDIS_PORT'),
     password: envParseString('REDIS_PASSWORD'),
@@ -57,31 +42,16 @@ export const CLIENT_OPTIONS: ClientOptions = {
   intents: [GatewayIntentBits.Guilds],
   allowedMentions: { users: [], roles: [] },
   presence: { activities: parsePresenceActivity() },
+  loadDefaultErrorListeners: false,
+  loadScheduledTaskErrorListeners: false,
   logger: { level: envParseString('NODE_ENV') === 'production' ? LogLevel.Info : LogLevel.Debug },
-  preventFailedToFetchLogForGuildIds: [
-    // Discord Bots
-    '110373943822540800',
-    // Discords.com: Bots For Discord
-    '374071874222686211',
-    // Discord Labs
-    '608711879858192479'
-  ],
-  partials: ['CHANNEL'],
-  sweepers: {
-    ...Options.defaultSweeperSettings,
-    messages: {
-      interval: minutes.toSeconds(3),
-      lifetime: minutes.toSeconds(15)
-    }
-  },
+  partials: [Partials.Channel],
   tasks: {
-    strategy: new ScheduledTaskRedisStrategy({
-      bull: {
-        redis: {
-          ...parseRedisOption(),
-          db: envParseInteger('REDIS_TASK_DB')
-        }
+    bull: {
+      connection: {
+        ...parseRedisOption(),
+        db: envParseInteger('REDIS_TASK_DB')
       }
-    })
+    }
   }
 };

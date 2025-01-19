@@ -1,68 +1,88 @@
-import { BrandingColors, CdnUrls } from '#utils/constants';
-import { parseBulbapediaURL } from '#utils/functions/pokemonParsers';
+import { BrandingColors, CdnUrls, Emojis } from '#utils/constants';
 import type { Move } from '@favware/graphql-pokemon';
-import { PaginatedMessage } from '@sapphire/discord.js-utilities';
+import { parseBulbapediaURL } from '@favware/graphql-pokemon/utilities';
+import { PaginatedMessage, type PaginatedMessageAction } from '@sapphire/discord.js-utilities';
 import { container } from '@sapphire/framework';
 import { toTitleCase } from '@sapphire/utilities';
-import { MessageEmbed } from 'discord.js';
+import { ButtonBuilder, ButtonStyle, EmbedBuilder, type APIButtonComponentWithURL } from 'discord.js';
 
 const PageLabels = ['General', 'Categories', 'Boosted Power Information', 'Availability'];
 
-export function moveResponseBuilder(move: Omit<Move, '__typename'>) {
-  const externalSources = [
-    `[Bulbapedia](${parseBulbapediaURL(move.bulbapediaPage)} )`,
-    `[Serebii](${move.serebiiPage})`,
-    `[Smogon](${move.smogonPage})`
-  ].join(' | ');
-
+export function moveResponseBuilder(move: Omit<Move, '__typename'>): PaginatedMessage {
   const paginatedMessage = new PaginatedMessage({
-    template: new MessageEmbed()
+    template: new EmbedBuilder()
       .setColor(BrandingColors.Primary)
       .setAuthor({ name: `Move - ${toTitleCase(move.name)}`, iconURL: CdnUrls.Pokedex })
       .setDescription(move.desc || move.shortDesc)
   })
+    .addActions(parseExternalResources(move))
     .setSelectMenuOptions((pageIndex) => ({ label: PageLabels[pageIndex - 1] }))
     .addPageEmbed((embed) => {
       if (move.isFieldMove) {
-        embed.addField('Effect outside of battle', move.isFieldMove, false);
+        embed.addFields({ name: 'Effect outside of battle', value: move.isFieldMove });
       }
 
-      return embed
-        .addField('Type', move.type, true)
-        .addField('Base Power', move.basePower, true)
-        .addField('PP', container.i18n.number.format(move.pp), true)
-        .addField('Accuracy', `${move.accuracy}%`, true)
-        .addField('External Resources', externalSources);
+      return embed.addFields(
+        { name: 'Type', value: move.type, inline: true },
+        { name: 'Base Power', value: move.basePower, inline: true },
+        { name: 'PP', value: container.i18n.number.format(move.pp), inline: true },
+        { name: 'Accuracy', value: `${move.accuracy}%`, inline: true }
+      );
     })
     .addPageEmbed((embed) =>
-      embed
-        .addField('Category', move.category, true)
-        .addField('Priority', container.i18n.number.format(move.priority), true)
-        .addField('Target', move.target, true)
-        .addField('Contest Condition', move.contestType ?? 'None', true)
-        .addField('External Resources', externalSources)
+      embed.addFields(
+        { name: 'Category', value: move.category, inline: true },
+        { name: 'Priority', value: container.i18n.number.format(move.priority), inline: true },
+        { name: 'Category', value: move.category, inline: true },
+        { name: 'Priority', value: container.i18n.number.format(move.priority), inline: true },
+        { name: 'Target', value: move.target, inline: true },
+        { name: 'Contest Condition', value: move.contestType ?? 'None', inline: true }
+      )
     );
 
   // If the move has zMovePower or maxMovePower then squeeze it in between as a page
   if (move.zMovePower || move.maxMovePower) {
     paginatedMessage.addPageEmbed((embed) => {
       if (move.maxMovePower) {
-        embed.addField('Base power as MAX move (Dynamax)', container.i18n.number.format(move.maxMovePower));
-      }
-      if (move.zMovePower) {
-        embed.addField('Base power as Z-Move (Z-Crystal)', container.i18n.number.format(move.zMovePower));
+        embed.addFields({ name: 'Base power as MAX move (Dynamax)', value: container.i18n.number.format(move.maxMovePower) });
       }
 
-      embed.addField('External Resources', externalSources);
+      if (move.zMovePower) {
+        embed.addFields({ name: 'Base power as Z-Move (Z-Crystal)', value: container.i18n.number.format(move.zMovePower) });
+      }
+
       return embed;
     });
   }
 
   return paginatedMessage.addPageEmbed((embed) =>
-    embed
-      .addField('Z-Crystal', move.isZ ?? 'None', true)
-      .addField('G-MAX Pokémon', move.isGMax ?? 'None', true)
-      .addField('Available in Generation 8', move.isNonstandard === 'Past' ? 'No' : 'Yes', true)
-      .addField('External Resources', externalSources)
+    embed.addFields(
+      { name: 'Z-Crystal', value: move.isZ ?? 'None', inline: true },
+      { name: 'G-MAX Pokémon', value: move.isGMax ?? 'None', inline: true },
+      { name: 'Available in Generation 9', value: move.isNonstandard ? 'No' : 'Yes', inline: true }
+    )
   );
+}
+
+function parseExternalResources(move: Omit<Move, '__typename'>): PaginatedMessageAction[] {
+  return [
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Bulbapedia')
+      .setEmoji({ id: Emojis.Bulbapedia })
+      .setURL(parseBulbapediaURL(move.bulbapediaPage))
+      .toJSON() as APIButtonComponentWithURL,
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Serebii')
+      .setEmoji({ id: Emojis.Serebii })
+      .setURL(move.serebiiPage)
+      .toJSON() as APIButtonComponentWithURL,
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Smogon')
+      .setEmoji({ id: Emojis.Smogon })
+      .setURL(move.smogonPage)
+      .toJSON() as APIButtonComponentWithURL
+  ];
 }

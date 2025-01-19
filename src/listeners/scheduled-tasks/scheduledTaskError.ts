@@ -1,20 +1,26 @@
-import { getErrorLine, getPathLine, getCodeLine } from '#utils/functions/errorHelpers';
+import { getErrorLine, getMethodLine, getStatusLine } from '#utils/functions/errorHelpers';
 import { ApplyOptions } from '@sapphire/decorators';
-import { Listener } from '@sapphire/framework';
-import { ScheduledTaskEvents } from '@sapphire/plugin-scheduled-tasks';
+import { Listener, LogLevel } from '@sapphire/framework';
+import type { Logger } from '@sapphire/plugin-logger';
+import { ScheduledTask, ScheduledTaskEvents } from '@sapphire/plugin-scheduled-tasks';
 import { isNullish } from '@sapphire/utilities';
-import { DiscordAPIError, HTTPError, MessageEmbed } from 'discord.js';
+import { DiscordAPIError, EmbedBuilder, HTTPError } from 'discord.js';
 
 @ApplyOptions<Listener.Options>({ event: ScheduledTaskEvents.ScheduledTaskError })
-export class UserListener extends Listener {
-  public override async run(error: Error, task: string) {
-    this.container.logger.error(`[Scheduled-Task Plugin]: task: ${task} threw an error`, error);
+export class UserListener extends Listener<typeof ScheduledTaskEvents.ScheduledTaskError> {
+  public override async run(error: Error, task: ScheduledTask) {
+    this.container.logger.error(`[Scheduled-Task Plugin]: task: ${task.name} threw an error`, error);
 
     // Send a detailed message:
     await this.sendErrorChannel(task, error);
   }
 
-  private async sendErrorChannel(task: string, error: Error) {
+  public override onLoad() {
+    this.enabled = (this.container.logger as Logger).level <= LogLevel.Debug;
+    return super.onLoad();
+  }
+
+  private async sendErrorChannel(task: ScheduledTask, error: Error) {
     const webhook = this.container.webhookError;
     if (isNullish(webhook)) return;
 
@@ -22,12 +28,12 @@ export class UserListener extends Listener {
 
     // If it's a DiscordAPIError or a HTTPError, add the HTTP path and code lines after the second one.
     if (error instanceof DiscordAPIError || error instanceof HTTPError) {
-      lines.splice(2, 0, getPathLine(error), getCodeLine(error));
+      lines.splice(2, 0, getMethodLine(error), getStatusLine(error));
     }
 
-    const embed = new MessageEmbed() //
+    const embed = new EmbedBuilder() //
       .setDescription(lines.join('\n'))
-      .setColor('RED')
+      .setColor('Red')
       .setTimestamp();
 
     try {
@@ -41,7 +47,7 @@ export class UserListener extends Listener {
    * Formats a task line.
    * @param task The task to format.
    */
-  private getTaskLine(task: string): string {
-    return `**Task**: ${task}`;
+  private getTaskLine(task: ScheduledTask): string {
+    return `**Task**: ${task.name}`;
   }
 }

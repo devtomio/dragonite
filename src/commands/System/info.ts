@@ -1,32 +1,43 @@
 import { BrandingColors } from '#utils/constants';
-import { seconds } from '#utils/functions/time';
-import { getGuildIds } from '#utils/utils';
-import { hideLinkEmbed, hyperlink, time, TimestampStyles } from '@discordjs/builders';
+import { secondsFromMilliseconds } from '#utils/functions/time';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Command, version as sapphireVersion, type ChatInputCommand } from '@sapphire/framework';
 import { roundNumber } from '@sapphire/utilities';
-import { PermissionFlagsBits } from 'discord-api-types/v9';
-import { MessageActionRow, MessageButton, MessageEmbed, Permissions, version } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  OAuth2Scopes,
+  PermissionFlagsBits,
+  PermissionsBitField,
+  TimestampStyles,
+  hideLinkEmbed,
+  hyperlink,
+  time,
+  version
+} from 'discord.js';
 import { cpus, uptime, type CpuInfo } from 'node:os';
 
 @ApplyOptions<ChatInputCommand.Options>({
-  description: 'Provides information about Dragonite, and links for adding the bot and joining the support server',
-  chatInputCommand: {
-    register: true,
-    guildIds: getGuildIds(),
-    idHints: ['936023680704741426', '942137399180402770']
-  }
+  description: 'Provides information about Dragonite, and links for adding the bot and joining the support server'
 })
 export class UserCommand extends Command {
-  readonly #sapphireNextVersionRegex = /-next\.[a-z0-9]+\.\d{1,}/i;
-
-  readonly #descriptionContent = [
+  private readonly descriptionContent = [
     `Dragonite is a Pokémon information Discord bot built around Discord Interactions.`,
     `This bot uses the ${hyperlink('Sapphire Framework', hideLinkEmbed('https://sapphirejs.dev'))} build on top of ${hyperlink(
       'discord.js',
       hideLinkEmbed('https://discord.js.org')
     )}.`
   ].join('\n');
+
+  public override registerApplicationCommands(registry: ChatInputCommand.Registry) {
+    registry.registerChatInputCommand((builder) =>
+      builder //
+        .setName(this.name)
+        .setDescription(this.description)
+    );
+  }
 
   public override chatInputRun(interaction: ChatInputCommand.Interaction) {
     return interaction.reply({
@@ -37,39 +48,48 @@ export class UserCommand extends Command {
     });
   }
 
-  private get components(): MessageActionRow[] {
+  private get components(): ActionRowBuilder<ButtonBuilder>[] {
     return [
-      new MessageActionRow().addComponents(
-        new MessageButton() //
-          .setStyle('LINK')
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder() //
+          .setStyle(ButtonStyle.Link)
           .setURL(this.inviteLink)
           .setLabel('Add me to your server!')
-          .setEmoji('🎉'),
-        new MessageButton() //
-          .setStyle('LINK')
+          .setEmoji({
+            name: '🎉'
+          }),
+        new ButtonBuilder() //
+          .setStyle(ButtonStyle.Link)
           .setURL('https://discord.gg/sguypX8')
           .setLabel('Support server')
-          .setEmoji('🆘')
+          .setEmoji({
+            name: '🆘'
+          })
       ),
-      new MessageActionRow().addComponents(
-        new MessageButton()
-          .setStyle('LINK')
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder() //
+          .setStyle(ButtonStyle.Link)
           .setURL('https://github.com/favware/dragonite')
           .setLabel('GitHub Repository')
-          .setEmoji('<:github2:950888087188283422>'),
-        new MessageButton() //
-          .setStyle('LINK')
+          .setEmoji({
+            id: '950888087188283422',
+            name: 'github2'
+          }),
+        new ButtonBuilder() //
+          .setStyle(ButtonStyle.Link)
           .setURL('https://github.com/sponsors/favna')
           .setLabel('Donate')
-          .setEmoji('🧡')
+          .setEmoji({
+            name: '🧡'
+          })
       )
     ];
   }
 
   private get inviteLink() {
     return this.container.client.generateInvite({
-      scopes: ['bot', 'applications.commands'],
-      permissions: new Permissions([
+      scopes: [OAuth2Scopes.Bot, OAuth2Scopes.ApplicationsCommands],
+      permissions: new PermissionsBitField([
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.ReadMessageHistory,
         PermissionFlagsBits.SendMessages,
@@ -78,7 +98,7 @@ export class UserCommand extends Command {
     });
   }
 
-  private get embed(): MessageEmbed {
+  private get embed(): EmbedBuilder {
     const titles = {
       stats: 'Statistics',
       uptime: 'Uptime',
@@ -111,9 +131,9 @@ export class UserCommand extends Command {
       ].join('\n')
     };
 
-    return new MessageEmbed() //
+    return new EmbedBuilder() //
       .setColor(BrandingColors.Primary)
-      .setDescription(this.#descriptionContent)
+      .setDescription(this.descriptionContent)
       .setFields(
         {
           name: titles.stats,
@@ -139,7 +159,7 @@ export class UserCommand extends Command {
       nodeJs: process.version,
       users: client.guilds.cache.reduce((acc, val) => acc + (val.memberCount ?? 0), 0),
       version: `v${version}`,
-      sapphireVersion: `v${sapphireVersion.replace(this.#sapphireNextVersionRegex, '')}`
+      sapphireVersion: `v${sapphireVersion}`
     };
   }
 
@@ -147,7 +167,7 @@ export class UserCommand extends Command {
     const now = Date.now();
     const nowSeconds = roundNumber(now / 1000);
     return {
-      client: time(seconds.fromMilliseconds(now - this.container.client.uptime!), TimestampStyles.RelativeTime),
+      client: time(secondsFromMilliseconds(now - this.container.client.uptime!), TimestampStyles.RelativeTime),
       host: time(roundNumber(nowSeconds - uptime()), TimestampStyles.RelativeTime),
       total: time(roundNumber(nowSeconds - process.uptime()), TimestampStyles.RelativeTime)
     };

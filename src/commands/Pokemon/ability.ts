@@ -1,31 +1,30 @@
 import { DragoniteCommand } from '#lib/extensions/DragoniteCommand';
 import { SelectMenuCustomIds } from '#utils/constants';
 import { abilityResponseBuilder } from '#utils/responseBuilders/abilityResponseBuilder';
-import { getGuildIds } from '#utils/utils';
 import type { AbilitiesEnum } from '@favware/graphql-pokemon';
 import { ApplyOptions } from '@sapphire/decorators';
 import type { ChatInputCommand } from '@sapphire/framework';
 import { isNullish } from '@sapphire/utilities';
-import { MessageActionRow, MessageSelectMenu, type MessageSelectOptionData } from 'discord.js';
+import { ActionRowBuilder, ApplicationIntegrationType, InteractionContextType, StringSelectMenuBuilder, type APISelectMenuOption } from 'discord.js';
 
 @ApplyOptions<ChatInputCommand.Options>({
   description: 'Gets data for the chosen Pokémon ability.'
 })
 export class SlashCommand extends DragoniteCommand {
   public override registerApplicationCommands(registry: ChatInputCommand.Registry) {
-    registry.registerChatInputCommand(
-      (builder) =>
-        builder //
-          .setName(this.name)
-          .setDescription(this.description)
-          .addStringOption((option) =>
-            option //
-              .setName('ability')
-              .setDescription('The name of the ability about which you want to get information.')
-              .setRequired(true)
-              .setAutocomplete(true)
-          ),
-      { guildIds: getGuildIds(), idHints: ['936023508364972122', '942137485973135381'] }
+    registry.registerChatInputCommand((builder) =>
+      builder //
+        .setName(this.name)
+        .setDescription(this.description)
+        .addStringOption((option) =>
+          option //
+            .setName('ability')
+            .setDescription('The name of the ability about which you want to get information.')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+        .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
     );
   }
 
@@ -38,11 +37,11 @@ export class SlashCommand extends DragoniteCommand {
 
     if (isNullish(abilityDetails)) {
       const fuzzyAbilities = await this.container.gqlClient.fuzzilySearchAbilities(ability, 25);
-      const options = fuzzyAbilities.map<MessageSelectOptionData>((fuzzyMatch) => ({ label: fuzzyMatch.name, value: fuzzyMatch.key }));
+      const options = fuzzyAbilities.map<APISelectMenuOption>((fuzzyMatch) => ({ label: fuzzyMatch.name, value: fuzzyMatch.key }));
 
-      const messageActionRow = new MessageActionRow() //
+      const messageActionRow = new ActionRowBuilder<StringSelectMenuBuilder>() //
         .setComponents(
-          new MessageSelectMenu() //
+          new StringSelectMenuBuilder() //
             .setCustomId(SelectMenuCustomIds.Ability)
             .setPlaceholder('Choose the ability you want to get information about.')
             .setOptions(options)
@@ -56,6 +55,6 @@ export class SlashCommand extends DragoniteCommand {
       });
     }
 
-    return interaction.editReply({ embeds: abilityResponseBuilder(abilityDetails) });
+    return interaction.editReply(abilityResponseBuilder(abilityDetails));
   }
 }
